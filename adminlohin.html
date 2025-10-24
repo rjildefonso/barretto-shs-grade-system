@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Admin Classes | BSHSIMS</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Login | BSHSIMS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
@@ -22,77 +22,45 @@
   window.db = db;
 </script>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white min-h-screen font-sans">
+<body class="bg-gradient-to-br from-gray-950 via-slate-900 to-indigo-950 flex items-center justify-center min-h-screen text-white px-4">
 
-<nav class="bg-slate-900/80 px-4 py-4 flex justify-between items-center fixed top-0 w-full z-50">
-  <h1 class="text-indigo-400 font-bold text-lg">BSHSIMS Admin</h1>
-  <button onclick="logout()" class="bg-red-600 px-3 py-1.5 rounded">Logout</button>
-</nav>
-
-<main class="pt-24 max-w-6xl mx-auto px-4">
-  <div class="flex justify-between mb-6">
-    <h2 class="text-2xl text-indigo-400 font-bold">My Classes</h2>
-    <button onclick="showAddClass()" class="bg-indigo-600 px-5 py-2 rounded">+ Add Class</button>
-  </div>
-  <div id="classList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-</main>
-
-<div id="classModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center px-4">
-  <div class="bg-slate-900 p-6 rounded-xl w-full max-w-sm">
-    <h3 class="text-xl text-indigo-400 mb-4 text-center">Add New Class</h3>
-    <input id="className" placeholder="Class Name" class="w-full p-3 mb-3 rounded bg-slate-800"/>
-    <input id="classSection" placeholder="Section" class="w-full p-3 mb-3 rounded bg-slate-800"/>
-    <div class="flex justify-end gap-3">
-      <button onclick="closeModal()" class="bg-gray-600 px-3 py-2 rounded">Cancel</button>
-      <button onclick="saveClass()" class="bg-indigo-600 px-3 py-2 rounded">Save</button>
-    </div>
+<div class="bg-slate-900/70 p-10 rounded-xl w-full max-w-sm">
+  <h1 class="text-3xl text-indigo-400 font-bold mb-5 text-center">Student Login</h1>
+  <div class="space-y-4">
+    <input id="studentId" placeholder="Student ID" class="w-full p-3 rounded bg-slate-800"/>
+    <input id="password" placeholder="Password" type="password" class="w-full p-3 rounded bg-slate-800"/>
+    <button onclick="login()" class="w-full bg-indigo-600 py-2 rounded">Sign In</button>
+    <p id="error" class="text-red-400 hidden text-center"></p>
   </div>
 </div>
 
 <script type="module">
-  import { collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  if(localStorage.getItem("adminLogged")!=="true") window.location.href="admin-login.html";
+  async function login(){
+    const sid=document.getElementById("studentId").value.trim();
+    const pass=document.getElementById("password").value.trim();
+    const error=document.getElementById("error");
 
-  async function renderClasses(){
-    const classList = document.getElementById("classList");
-    classList.innerHTML="";
-    const querySnapshot = await getDocs(collection(db,"classes"));
-    if(querySnapshot.empty){ classList.innerHTML="<p class='col-span-full text-center text-slate-400'>No classes yet.</p>"; return; }
-    querySnapshot.forEach(docSnap=>{
-      const c = docSnap.data();
-      const id = docSnap.id;
-      const card=document.createElement("div");
-      card.className="bg-slate-900/80 p-5 rounded-xl shadow";
-      card.innerHTML=`
-        <h3 class="text-indigo-400 font-semibold text-lg">${c.name}</h3>
-        <p class="text-slate-300 mb-4">Section: ${c.section}</p>
-        <div class="flex gap-2">
-          <button onclick="openClass('${id}')" class="bg-blue-600 px-3 py-1 rounded flex-1">Open</button>
-          <button onclick="deleteClass('${id}')" class="bg-red-600 px-3 py-1 rounded flex-1">Delete</button>
-        </div>
-      `;
-      classList.appendChild(card);
+    if(!sid||!pass){ error.textContent="Fill both fields"; error.classList.remove("hidden"); return; }
+
+    const snap = await getDocs(collection(db,"classes"));
+    let foundStudent=null, foundClassId=null;
+    snap.forEach(docSnap=>{
+      const c=docSnap.data();
+      const s=c.students?.find(s=>s.id===sid && s.password===pass);
+      if(s){ foundStudent=s; foundClassId=docSnap.id; }
     });
+
+    if(foundStudent){
+      localStorage.setItem("studentLogged","true");
+      localStorage.setItem("loggedClassId",foundClassId);
+      localStorage.setItem("loggedStudentId",foundStudent.id);
+      window.location.href="student-dashboard.html";
+    } else {
+      error.textContent="Invalid ID or Password"; error.classList.remove("hidden");
+    }
   }
-
-  function showAddClass(){ document.getElementById("classModal").classList.remove("hidden"); }
-  function closeModal(){ document.getElementById("classModal").classList.add("hidden"); }
-
-  async function saveClass(){
-    const name=document.getElementById("className").value.trim();
-    const section=document.getElementById("classSection").value.trim();
-    if(!name||!section) return alert("Fill all fields");
-    await setDoc(doc(db,"classes",name+"_"+section),{name,section,students:[]});
-    closeModal();
-    renderClasses();
-  }
-
-  async function deleteClass(id){ if(!confirm("Delete this class?")) return; await deleteDoc(doc(db,"classes",id)); renderClasses(); }
-  function openClass(id){ localStorage.setItem("selectedClass",id); window.location.href="admin-dashboard.html"; }
-  function logout(){ localStorage.removeItem("adminLogged"); window.location.href="admin-login.html"; }
-
-  renderClasses();
 </script>
 </body>
 </html>
