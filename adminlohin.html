@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Grades | BSHSIMS</title>
+<title>Admin Dashboard | BSHSIMS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
@@ -20,105 +20,142 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  window.db = db;
 </script>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white min-h-screen font-sans">
 
 <nav class="bg-slate-900/80 px-4 py-4 flex justify-between fixed top-0 w-full z-50">
-  <h1 class="text-indigo-400 font-bold">Student Dashboard</h1>
+  <h1 class="text-indigo-400 font-bold">Admin Dashboard</h1>
   <button onclick="logout()" class="bg-red-600 px-3 py-1.5 rounded">Logout</button>
 </nav>
 
-<main class="max-w-5xl mx-auto mt-24 px-4">
+<main class="max-w-7xl mx-auto mt-24 px-4">
+  <h2 id="classTitle" class="text-2xl text-indigo-400 font-bold mb-6"></h2>
 
-  <div class="bg-slate-900/60 backdrop-blur-md rounded-2xl p-5 mb-8 text-center sm:text-left shadow-xl border border-slate-700">
-    <h2 id="studentName" class="text-2xl sm:text-3xl font-bold text-indigo-400"></h2>
-    <p id="studentID" class="text-slate-400 mt-1 text-sm sm:text-base"></p>
-    <p class="mt-2 text-slate-300 text-sm sm:text-base">Welcome back! Here’s your grades this quarter.</p>
+  <div class="flex flex-wrap gap-3 mb-6">
+    <button onclick="addStudent()" class="bg-indigo-600 px-4 py-2 rounded">+ Add Student</button>
+    <button onclick="manageSubjects()" class="bg-emerald-600 px-4 py-2 rounded">⚙️ Manage Subjects</button>
   </div>
 
-  <section class="bg-slate-900/70 backdrop-blur-md rounded-2xl shadow-xl border border-slate-700 p-5">
-    <h3 class="text-xl sm:text-2xl font-semibold text-indigo-400 mb-4 text-center sm:text-left">Grades</h3>
-    <div class="overflow-x-auto rounded-lg">
-      <table class="w-full text-left border-collapse text-sm sm:text-base">
-        <thead class="bg-slate-800/80 text-indigo-300">
-          <tr>
-            <th class="p-3 uppercase">Subject</th>
-            <th class="p-3 text-center uppercase">Grade</th>
-          </tr>
-        </thead>
-        <tbody id="gradesTable" class="divide-y divide-slate-700"></tbody>
-      </table>
-    </div>
-
-    <div class="mt-8 text-center">
-      <p class="text-slate-300 text-base sm:text-lg">General Average</p>
-      <h3 id="studentAverage" class="text-4xl sm:text-5xl font-extrabold text-white mt-2 drop-shadow-lg"></h3>
-      <p id="studentStatus" class="text-lg sm:text-xl mt-3 font-semibold"></p>
-    </div>
-  </section>
-
+  <div class="overflow-x-auto shadow-lg rounded-2xl border border-slate-700">
+    <table class="min-w-full bg-slate-800 rounded-2xl">
+      <thead class="bg-slate-900 text-slate-300">
+        <tr id="tableHead"></tr>
+      </thead>
+      <tbody id="studentList" class="divide-y divide-slate-700"></tbody>
+    </table>
+  </div>
 </main>
 
-<footer class="text-center text-slate-500 text-xs sm:text-sm mt-16 mb-6">
-  © 2025 Barretto Senior High School
-</footer>
+<div id="subjectModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4">
+  <div class="bg-slate-900 p-5 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-700 mx-auto">
+    <h3 class="text-xl text-indigo-300 mb-3">Manage Subjects</h3>
+    <ul id="subjectList" class="mb-4 max-h-64 overflow-y-auto"></ul>
+    <div class="flex flex-col sm:flex-row gap-2 mb-4">
+      <input id="newSubject" type="text" placeholder="New subject name" class="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white">
+      <button onclick="addNewSubject()" class="bg-indigo-600 px-4 py-2 rounded">Add</button>
+    </div>
+    <div class="text-center sm:text-right">
+      <button onclick="closeSubjectModal()" class="bg-red-600 px-5 py-2 rounded">Close</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
-  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  if(localStorage.getItem("studentLogged")!=="true") window.location.href="student-login.html";
-
-  const classId = localStorage.getItem("loggedClassId");
-  const studentId = localStorage.getItem("loggedStudentId");
+  if(localStorage.getItem("adminLogged")!=="true") window.location.href="admin-login.html";
+  const classId = localStorage.getItem("selectedClass");
   const classRef = doc(db,"classes",classId);
 
-  async function loadStudent(){
+  let currentClass = null;
+  const subjects = [];
+
+  async function loadClass(){
     const snap = await getDoc(classRef);
-    if(!snap.exists()) return window.location.href="student-login.html";
+    if(snap.exists()){
+      currentClass = snap.data();
+      document.getElementById("classTitle").innerText = `${currentClass.name} - ${currentClass.section}`;
+      if(currentClass.subjects) subjects.push(...currentClass.subjects);
+      renderStudents();
+    }
+  }
 
-    const currentClass = snap.data();
-    const student = currentClass.students.find(s => s.id===studentId);
-    if(!student) return window.location.href="student-login.html";
+  function renderHeader(){
+    const headRow = document.getElementById("tableHead");
+    headRow.innerHTML = `<th>Student ID</th><th>Name</th><th>Password</th>${subjects.map(s=>`<th>${s}</th>`).join("")}<th>Average</th><th>Status</th><th>Action</th>`;
+  }
 
-    document.getElementById("studentName").textContent = student.name;
-    document.getElementById("studentID").textContent = "Student ID: " + student.id;
+  function computeAverage(student){
+    const grades = Object.values(student.grades||{}).filter(g=>g!=null);
+    if(!grades.length) return "-";
+    return (grades.reduce((a,b)=>a+Number(b),0)/grades.length).toFixed(2);
+  }
 
-    const subjects = currentClass.subjects || [];
-    const gradesTable = document.getElementById("gradesTable");
-    gradesTable.innerHTML="";
-
-    subjects.forEach(sub=>{
-      const grade = student.grades[sub] ?? "-";
-      const colorClass = grade === "-" ? "text-slate-400" :
-                         grade>=90 ? "text-green-400 font-semibold" :
-                         grade>=75 ? "text-yellow-300 font-semibold" :
-                         "text-red-400 font-semibold";
-
-      gradesTable.innerHTML += `<tr class="hover:bg-slate-800/70 transition-all">
-        <td class="p-3 break-words">${sub}</td>
-        <td class="p-3 text-center ${colorClass}">${grade}</td>
-      </tr>`;
+  function renderStudents(){
+    renderHeader();
+    const tbody = document.getElementById("studentList");
+    tbody.innerHTML="";
+    if(!currentClass.students?.length){
+      tbody.innerHTML="<tr><td colspan='"+(subjects.length+5)+"' class='text-center text-slate-400 p-6'>No students yet</td></tr>";
+      return;
+    }
+    currentClass.students.forEach((s,i)=>{
+      const avg = computeAverage(s);
+      const status = avg==="-"? "-" : (avg>=75 ? "✅ Passed" : "❌ Failed");
+      const row=document.createElement("tr");
+      row.innerHTML=`<td>${s.id}</td><td>${s.name}</td><td><input value="${s.password}" onchange="updatePassword(${i},this.value)"/></td>${subjects.map(sub=>`<td><input type="number" value="${s.grades[sub]??''}" onchange="updateGrade(${i},'${sub}',this.value)"/></td>`).join("")}<td>${avg}</td><td>${status}</td><td><button onclick="deleteStudent(${i})" class="bg-red-600 px-2 rounded">Delete</button></td>`;
+      tbody.appendChild(row);
     });
-
-    const validGrades = Object.values(student.grades||{}).filter(g=>g!=null);
-    const avg = validGrades.length ? (validGrades.reduce((a,b)=>a+Number(b),0)/validGrades.length).toFixed(2) : "-";
-    const status = avg === "-" ? "-" : (avg>=75 ? "✅ Passed" : "❌ Failed");
-
-    document.getElementById("studentAverage").textContent = avg;
-    const statusEl = document.getElementById("studentStatus");
-    statusEl.textContent = status==="-" ? "" : (status.includes("Passed") ? "Status: Passed" : "Status: Failed");
-    statusEl.className = status.includes("Passed") ? "text-green-400 text-lg sm:text-xl mt-3 font-semibold" : "text-red-400 text-lg sm:text-xl mt-3 font-semibold";
   }
 
-  loadStudent();
+  async function saveClassChanges(){ await setDoc(classRef,currentClass); }
 
-  function logout(){
-    localStorage.removeItem("studentLogged");
-    localStorage.removeItem("loggedStudentId");
-    localStorage.removeItem("loggedClassId");
-    window.location.href="student-login.html";
+  async function addStudent(){
+    const id = prompt("Student ID"); if(!id) return;
+    const name = prompt("Name"); if(!name) return;
+    const password = prompt("Password")||"password123";
+    const newStudent={id,name,password,grades:{}};
+    subjects.forEach(s=>newStudent.grades[s]=null);
+    if(!currentClass.students) currentClass.students=[];
+    currentClass.students.push(newStudent);
+    await saveClassChanges();
+    renderStudents();
   }
+
+  function updatePassword(i,val){ currentClass.students[i].password=val; saveClassChanges(); }
+  function updateGrade(i,sub,val){ const n=Number(val); if(isNaN(n)) return; currentClass.students[i].grades[sub]=n; saveClassChanges(); renderStudents(); }
+  function deleteStudent(i){ if(confirm("Delete?")){ currentClass.students.splice(i,1); saveClassChanges(); renderStudents(); } }
+
+  function manageSubjects(){
+    const list = document.getElementById("subjectList");
+    list.innerHTML=subjects.map((s,i)=>`<li class="flex justify-between bg-slate-800 px-3 py-2 rounded"><span>${s}</span><button onclick="removeSubject(${i})" class="text-red-400">✖</button></li>`).join("");
+    document.getElementById("subjectModal").classList.remove("hidden");
+  }
+
+  async function addNewSubject(){
+    const val=document.getElementById("newSubject").value.trim();
+    if(!val || subjects.includes(val)) return alert("Invalid or duplicate subject");
+    subjects.push(val); currentClass.subjects=subjects;
+    await saveClassChanges();
+    document.getElementById("newSubject").value="";
+    manageSubjects(); renderStudents();
+  }
+
+  async function removeSubject(i){
+    if(!confirm("Remove this subject?")) return;
+    const removed = subjects.splice(i,1);
+    currentClass.students?.forEach(s=>delete s.grades[removed[0]]);
+    currentClass.subjects = subjects;
+    await saveClassChanges();
+    manageSubjects(); renderStudents();
+  }
+
+  function closeSubjectModal(){ document.getElementById("subjectModal").classList.add("hidden"); }
+  function logout(){ localStorage.removeItem("adminLogged"); window.location.href="admin-login.html"; }
+
+  loadClass();
 </script>
 </body>
 </html>
