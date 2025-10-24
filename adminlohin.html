@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Student Login | BSHSIMS</title>
+<title>Student Grades | BSHSIMS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
@@ -17,49 +17,107 @@
     messagingSenderId: "YOUR_SENDER_ID",
     appId: "YOUR_APP_ID"
   };
+
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  window.db = db;
 </script>
 </head>
-<body class="bg-gradient-to-br from-gray-950 via-slate-900 to-indigo-950 flex items-center justify-center min-h-screen text-white px-4">
+<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white min-h-screen font-sans">
 
-<div class="bg-slate-900/70 p-10 rounded-xl w-full max-w-sm">
-  <h1 class="text-3xl text-indigo-400 font-bold mb-5 text-center">Student Login</h1>
-  <div class="space-y-4">
-    <input id="studentId" placeholder="Student ID" class="w-full p-3 rounded bg-slate-800"/>
-    <input id="password" placeholder="Password" type="password" class="w-full p-3 rounded bg-slate-800"/>
-    <button onclick="login()" class="w-full bg-indigo-600 py-2 rounded">Sign In</button>
-    <p id="error" class="text-red-400 hidden text-center"></p>
+<nav class="bg-slate-900/80 px-4 py-4 flex justify-between fixed top-0 w-full z-50">
+  <h1 class="text-indigo-400 font-bold">Student Dashboard</h1>
+  <button onclick="logout()" class="bg-red-600 px-3 py-1.5 rounded">Logout</button>
+</nav>
+
+<main class="max-w-5xl mx-auto mt-24 px-4">
+
+  <div class="bg-slate-900/60 backdrop-blur-md rounded-2xl p-5 mb-8 text-center sm:text-left shadow-xl border border-slate-700">
+    <h2 id="studentName" class="text-2xl sm:text-3xl font-bold text-indigo-400"></h2>
+    <p id="studentID" class="text-slate-400 mt-1 text-sm sm:text-base"></p>
+    <p class="mt-2 text-slate-300 text-sm sm:text-base">Welcome back! Here’s your grades this quarter.</p>
   </div>
-</div>
+
+  <section class="bg-slate-900/70 backdrop-blur-md rounded-2xl shadow-xl border border-slate-700 p-5">
+    <h3 class="text-xl sm:text-2xl font-semibold text-indigo-400 mb-4 text-center sm:text-left">Grades</h3>
+    <div class="overflow-x-auto rounded-lg">
+      <table class="w-full text-left border-collapse text-sm sm:text-base">
+        <thead class="bg-slate-800/80 text-indigo-300">
+          <tr>
+            <th class="p-3 uppercase">Subject</th>
+            <th class="p-3 text-center uppercase">Grade</th>
+          </tr>
+        </thead>
+        <tbody id="gradesTable" class="divide-y divide-slate-700"></tbody>
+      </table>
+    </div>
+
+    <div class="mt-8 text-center">
+      <p class="text-slate-300 text-base sm:text-lg">General Average</p>
+      <h3 id="studentAverage" class="text-4xl sm:text-5xl font-extrabold text-white mt-2 drop-shadow-lg"></h3>
+      <p id="studentStatus" class="text-lg sm:text-xl mt-3 font-semibold"></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="text-center text-slate-500 text-xs sm:text-sm mt-16 mb-6">
+  © 2025 Barretto Senior High School
+</footer>
 
 <script type="module">
-  import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  async function login(){
-    const sid=document.getElementById("studentId").value.trim();
-    const pass=document.getElementById("password").value.trim();
-    const error=document.getElementById("error");
+  if(localStorage.getItem("studentLogged")!=="true") window.location.href="student-login.html";
 
-    if(!sid||!pass){ error.textContent="Fill both fields"; error.classList.remove("hidden"); return; }
+  const classId = localStorage.getItem("loggedClassId");
+  const studentId = localStorage.getItem("loggedStudentId");
+  const classRef = doc(db,"classes",classId);
 
-    const snap = await getDocs(collection(db,"classes"));
-    let foundStudent=null, foundClassId=null;
-    snap.forEach(docSnap=>{
-      const c=docSnap.data();
-      const s=c.students?.find(s=>s.id===sid && s.password===pass);
-      if(s){ foundStudent=s; foundClassId=docSnap.id; }
+  async function loadStudent(){
+    const snap = await getDoc(classRef);
+    if(!snap.exists()) return window.location.href="student-login.html";
+
+    const currentClass = snap.data();
+    const student = currentClass.students.find(s => s.id===studentId);
+    if(!student) return window.location.href="student-login.html";
+
+    document.getElementById("studentName").textContent = student.name;
+    document.getElementById("studentID").textContent = "Student ID: " + student.id;
+
+    const subjects = currentClass.subjects || [];
+    const gradesTable = document.getElementById("gradesTable");
+    gradesTable.innerHTML="";
+
+    subjects.forEach(sub=>{
+      const grade = student.grades[sub] ?? "-";
+      const colorClass = grade === "-" ? "text-slate-400" :
+                         grade>=90 ? "text-green-400 font-semibold" :
+                         grade>=75 ? "text-yellow-300 font-semibold" :
+                         "text-red-400 font-semibold";
+
+      gradesTable.innerHTML += `<tr class="hover:bg-slate-800/70 transition-all">
+        <td class="p-3 break-words">${sub}</td>
+        <td class="p-3 text-center ${colorClass}">${grade}</td>
+      </tr>`;
     });
 
-    if(foundStudent){
-      localStorage.setItem("studentLogged","true");
-      localStorage.setItem("loggedClassId",foundClassId);
-      localStorage.setItem("loggedStudentId",foundStudent.id);
-      window.location.href="student-dashboard.html";
-    } else {
-      error.textContent="Invalid ID or Password"; error.classList.remove("hidden");
-    }
+    const validGrades = Object.values(student.grades||{}).filter(g=>g!=null);
+    const avg = validGrades.length ? (validGrades.reduce((a,b)=>a+Number(b),0)/validGrades.length).toFixed(2) : "-";
+    const status = avg === "-" ? "-" : (avg>=75 ? "✅ Passed" : "❌ Failed");
+
+    document.getElementById("studentAverage").textContent = avg;
+    const statusEl = document.getElementById("studentStatus");
+    statusEl.textContent = status==="-" ? "" : (status.includes("Passed") ? "Status: Passed" : "Status: Failed");
+    statusEl.className = status.includes("Passed") ? "text-green-400 text-lg sm:text-xl mt-3 font-semibold" : "text-red-400 text-lg sm:text-xl mt-3 font-semibold";
+  }
+
+  loadStudent();
+
+  function logout(){
+    localStorage.removeItem("studentLogged");
+    localStorage.removeItem("loggedStudentId");
+    localStorage.removeItem("loggedClassId");
+    window.location.href="student-login.html";
   }
 </script>
 </body>
