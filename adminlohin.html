@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Login | BSHSIMS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.db = db;
+</script>
+</head>
+<body class="bg-gradient-to-br from-gray-950 via-emerald-950 to-emerald-900 min-h-screen flex items-center justify-center text-white px-4">
+
+<div class="bg-slate-900/70 p-10 rounded-xl w-full max-w-sm">
+  <h1 class="text-3xl font-bold text-indigo-400 mb-5 text-center">BSHSIMS Admin</h1>
+  <div class="space-y-4">
+    <input id="username" placeholder="Username" class="w-full p-3 rounded bg-slate-800 text-white"/>
+    <input id="password" placeholder="Password" type="password" class="w-full p-3 rounded bg-slate-800 text-white"/>
+    <button onclick="login()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded text-white font-semibold">Sign In</button>
+    <p id="error" class="text-red-400 hidden text-center"></p>
+  </div>
+</div>
+
+<script type="module">
+  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  async function login() {
+    const user = document.getElementById("username").value.trim();
+    const pass = document.getElementById("password").value.trim();
+    const error = document.getElementById("error");
+
+    if(!user || !pass){ error.textContent="Enter username & password"; error.classList.remove("hidden"); return; }
+
+    const docRef = doc(db,"admins",user);
+    const docSnap = await getDoc(docRef);
+    if(docSnap.exists() && docSnap.data().password === pass){
+      localStorage.setItem("adminLogged","true");
+      window.location.href = "adminclass.html";
+    } else {
+      error.textContent="Invalid username or password"; 
+      error.classList.remove("hidden");
+    }
+  }
+</script>
+</body>
+</html>
